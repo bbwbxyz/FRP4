@@ -1,0 +1,72 @@
+$cd=$env:temp; cd $cd; [Environment]::CurrentDirectory = $cd
+$host.UI.RawUI.WindowSize = New-Object Management.Automation.Host.Size ($host.UI.RawUI.WindowSize.Width, 12)
+######################################################
+$s="11436访问4455 -->> free.frpee.com:11436"; $s; $host.UI.RawUI.WindowTitle = $s
+$server = "free.frpee.com"; $user = "19117"; $token = "18823"; $remotePort = 11436; $localPort = 4455; #852029091@qq.com
+###################################################### 获取工具软件路径
+function getToolPath
+{
+	param (
+		[string]$filePath,
+		[string]$urlDown,
+		[string]$fileMD5
+	)
+	
+	$shouldDownload = $true;
+	
+	# 如果文件存在，先检查 MD5 值
+	if (Test-Path $filePath)
+	{
+		$computedMD5 = (Get-FileHash $filePath -Algorithm MD5).Hash
+		if ($computedMD5 -eq $fileMD5)
+		{
+			$shouldDownload = $false # 无需下载
+		}
+	}
+	
+	# 如果文件不存在或 MD5 校验失败，则下载文件
+	if ($shouldDownload)
+	{
+		# 检查文件所在目录是否存在，如果不存在则先创建
+		$directory = [System.IO.Path]::GetDirectoryName($filePath)
+		if (-Not (Test-Path $directory)) { New-Item -Path $directory -ItemType Directory > $Null }
+		
+		(New-Object Net.WebClient).DownloadFile($urlDown, $filePath) #下载文件
+		
+		# 下载完成后再次检查 MD5 值
+		$computedMD5 = (Get-FileHash $filePath -Algorithm MD5).Hash
+		if ($computedMD5 -ne $fileMD5) { Throw }
+	}
+	
+	# 执行解压
+	if ($filePath -match '\.zip$')
+	{
+		$outputDirectory = [System.IO.Path]::GetDirectoryName($filePath)
+		Expand-Archive -Path $filePath -DestinationPath $outputDirectory -Force
+		del $filePath -for
+		$filePath = $filePath -replace '\.zip$', '.exe'
+	}
+	return $filePath
+}
+
+$one = "http://www.jyhmedia.com/OneManager/bbwbxyz"
+getToolPath -filePath $cd\frpc.exe -urlDown "$one/SOFT/WIN/RunTime/Frpc/Frpc.exe" -fileMD5 '6552385E0220CEB7581BB566DED505CD'
+
+$ip = (Get-NetIPAddress | ? {$_.AddressFamily -eq 'IPv4' -and $_.AddressState -eq 'Preferred' -and $_.InterfaceAlias -ne 'Loopback Pseudo-Interface 1'}).IPAddress
+$toml = @"
+serverAddr = `"$server`"
+serverPort = 7000
+user = `"$user`"
+metadatas.password = `"$token`"
+#metadatas.token = `"$token`"
+[[proxies]]
+name = `"HTTP Server $ip`"
+type = "tcp"
+localIP = `"$ip`"
+localPort = $localPort
+remotePort = $remotePort
+transport.useEncryption = true
+transport.useCompression = true
+"@
+[IO.File]::WriteAllText("frpc.toml", $toml)
+& .\frpc.exe -c frpc.toml
